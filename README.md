@@ -14,6 +14,8 @@
 
 <br/>
 
+*Example of usage:* <br/>
+
 <p align = "center">
   <img width="400" height="533" src="">
 </p>
