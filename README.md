@@ -3,7 +3,7 @@
 
 <br/>
 
-# Details
+**Details:** <br/>
 
 <br/>
 
@@ -13,6 +13,10 @@
 &emsp; Used PyGame for the graphical interface, along with Numpy for fast vectorization. <br/>
 
 <br/>
+
+<p align = "center">
+  <img width="400" height="533" src="">
+</p>
 
 
 
