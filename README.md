@@ -17,7 +17,7 @@
 **Example of usage:** <br/>
 
 <p align = "center">
-  <img width="400" height="533" src="">
+  <img width="400" height="533" src="https://github.com/Razvan48/Digit-Recognizer-in-Python/blob/main/demo/ezgif.com-video-to-gif-converter.gif">
 </p>
 
 
