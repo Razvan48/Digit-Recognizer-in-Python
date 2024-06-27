@@ -8,7 +8,7 @@ import sklearn.neural_network as neural_network
 
 # Model
 
-trainSize = 60000
+trainSize = 10000
 
 mnist = datasets.fetch_openml('mnist_784', version=1, cache=True)
 
@@ -67,12 +67,12 @@ def predictNaiveBayes(testImage):
 
 multinomialNB = naive_bayes.MultinomialNB()
 multinomialNB.fit(trainImages, trainLabels)
-'''
 
 # MLP Classifier
 
 mlpClassifier = neural_network.MLPClassifier(hidden_layer_sizes=(64, 64), alpha=0.001, early_stopping=True)
 mlpClassifier.fit(trainImages, trainLabels)
+'''
 
 
 # Interface, PyGame
@@ -182,7 +182,6 @@ while isRunning:
             pg.draw.rect(screen, (luminosity, luminosity, luminosity), drawCells[i][j])
 
     # KNN
-    '''
     binCountsKNN = predictKNN(np.array(drawMatrix).reshape((-1,)), trainImages, trainLabels)
 
     for label, frequency in enumerate(binCountsKNN):
@@ -196,7 +195,6 @@ while isRunning:
         textToRender = str(label) + ': ' + str(round(0, 2)) + '%'
         textSurface = font.render(textToRender, True, (255, 255, 255))
         screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
-    '''
 
     '''
     # Naive Bayes
@@ -217,6 +215,7 @@ while isRunning:
     print(multinomialNB.predict(np.array(drawMatrix).reshape((1, 784))))
     '''
 
+    '''
     mlpPredictions = mlpClassifier.predict_proba(np.array(drawMatrix).reshape((1, -1))).reshape((-1, ))
 
     for label, prob in enumerate(mlpPredictions):
@@ -227,6 +226,8 @@ while isRunning:
             textSurface = font.render(textToRender, True, (255, 255, 255))
         screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
     #
+    
+    '''
 
     pg.display.flip()
 
