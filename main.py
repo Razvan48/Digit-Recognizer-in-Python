@@ -5,10 +5,12 @@ import sklearn.datasets as datasets
 import pandas as pd
 import sklearn.naive_bayes as naive_bayes
 import sklearn.neural_network as neural_network
+import sklearn.svm as svm
+import pickle
 
 # Model
 
-trainSize = 10000
+trainSize = 30000
 
 mnist = datasets.fetch_openml('mnist_784', version=1, cache=True)
 
@@ -20,6 +22,7 @@ randomPermutation = np.random.permutation(trainSize)
 trainImages = trainImages[randomPermutation]
 trainLabels = trainLabels[randomPermutation]
 
+'''
 # KNN
 def predictKNN(testImage, trainImages, trainLabels, K=100, metric='l2'):
     if metric == 'l1':
@@ -32,7 +35,6 @@ def predictKNN(testImage, trainImages, trainLabels, K=100, metric='l2'):
     return np.bincount(bestKLabels)
 
 
-'''
 # Naive Bayes
 numBins = 4
 # probability [label][pixel pos][bin index] / total tests
@@ -73,6 +75,19 @@ multinomialNB.fit(trainImages, trainLabels)
 mlpClassifier = neural_network.MLPClassifier(hidden_layer_sizes=(64, 64), alpha=0.001, early_stopping=True)
 mlpClassifier.fit(trainImages, trainLabels)
 '''
+
+# SVC
+
+'''
+svc = svm.SVC(kernel='rbf', probability=True)
+svc.fit(trainImages, trainLabels)
+
+with open('models/svcModel.pkl', 'wb') as svcFile:
+    pickle.dump(svc, svcFile)
+'''
+
+with open('models/svcModel.pkl', 'rb') as svcFile:
+    svc = pickle.load(svcFile)
 
 
 # Interface, PyGame
@@ -181,6 +196,7 @@ while isRunning:
             luminosity = drawMatrix[i][j]
             pg.draw.rect(screen, (luminosity, luminosity, luminosity), drawCells[i][j])
 
+    '''
     # KNN
     binCountsKNN = predictKNN(np.array(drawMatrix).reshape((-1,)), trainImages, trainLabels)
 
@@ -196,7 +212,6 @@ while isRunning:
         textSurface = font.render(textToRender, True, (255, 255, 255))
         screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
 
-    '''
     # Naive Bayes
     naiveBayesProb = predictNaiveBayes(np.array(drawMatrix).reshape((-1,)))
 
@@ -213,9 +228,8 @@ while isRunning:
         screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
 
     print(multinomialNB.predict(np.array(drawMatrix).reshape((1, 784))))
-    '''
-
-    '''
+    
+    # MLP
     mlpPredictions = mlpClassifier.predict_proba(np.array(drawMatrix).reshape((1, -1))).reshape((-1, ))
 
     for label, prob in enumerate(mlpPredictions):
@@ -228,6 +242,20 @@ while isRunning:
     #
     
     '''
+
+    # SVC
+    svcPredictions = svc.predict_proba(np.array(drawMatrix).reshape((1, -1))).reshape((-1, ))
+
+    for label, prob in enumerate(svcPredictions):
+        textToRender = str(label) + ': ' + str(round(100 * prob / np.sum(svcPredictions), 2)) + '%'
+        if label == np.argmax(svcPredictions):
+            textSurface = font.render(textToRender, True, (0, 255, 0))
+        else:
+            textSurface = font.render(textToRender, True, (255, 255, 255))
+        screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
+
+
+
 
     pg.display.flip()
 
