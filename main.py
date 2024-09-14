@@ -7,9 +7,39 @@ import sklearn.naive_bayes as naive_bayes
 import sklearn.neural_network as neural_network
 import sklearn.svm as svm
 import pickle
+import tensorflow as tf
 
-# Model
+# Data for mnist using tensorflow
+tfMnist = tf.keras.datasets.mnist
+(tfTrainImages, tfTrainLabels), (tfTestImages, tfTestLabels) = tfMnist.load_data()
+tfTrainImages = tfTrainImages.reshape((60000, 28, 28, 1))
+tfTestImages = tfTestImages.reshape((10000, 28, 28, 1))
 
+# Model using tensorflow
+'''
+TF_ENABLE_ONEDNN_OPTS = 0
+tfConvModel = tf.keras.models.Sequential()
+tfConvModel.add(tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)))
+tfConvModel.add(tf.keras.layers.MaxPooling2D((2, 2)))
+tfConvModel.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu'))
+tfConvModel.add(tf.keras.layers.MaxPooling2D((2, 2)))
+tfConvModel.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu'))
+
+tfConvModel.add(tf.keras.layers.Flatten())
+tfConvModel.add(tf.keras.layers.Dense(64, activation='relu'))
+tfConvModel.add(tf.keras.layers.Dense(10, activation='softmax'))
+
+tfConvModel.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+tfConvModel.fit(tfTrainImages, tfTrainLabels, epochs=5)
+
+tfTestLoss, tfTestAccuracy = tfConvModel.evaluate(tfTestImages, tfTestLabels, verbose=2)
+
+tfConvModel.save('models/tfConvModel.h5')
+'''
+tfConvModel = tf.keras.models.load_model('models/tfConvModel.h5')
+
+'''
 trainSize = 30000
 
 mnist = datasets.fetch_openml('mnist_784', version=1, cache=True)
@@ -21,6 +51,9 @@ randomPermutation = np.random.permutation(trainSize)
 
 trainImages = trainImages[randomPermutation]
 trainLabels = trainLabels[randomPermutation]
+'''
+
+
 
 '''
 # KNN
@@ -91,6 +124,7 @@ with open('models/svcModel.pkl', 'rb') as svcFile:
 
 
 # Interface, PyGame
+
 
 pg.init()
 
@@ -241,8 +275,6 @@ while isRunning:
         screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
     #
     
-    '''
-
     # SVC
     svcPredictions = svc.predict_proba(np.array(drawMatrix).reshape((1, -1))).reshape((-1, ))
 
@@ -253,9 +285,18 @@ while isRunning:
         else:
             textSurface = font.render(textToRender, True, (255, 255, 255))
         screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
+    '''
 
+    # TensorFlow Conv model
 
-
+    tfConvPredictions = tfConvModel.predict(np.array(drawMatrix).reshape((1, 28, 28, 1))).reshape((-1,))
+    for tfLabel, tfProb in enumerate(tfConvPredictions):
+        textToRender = str(tfLabel) + ': ' + str(round(100 * tfProb, 2)) + '%'
+        if tfLabel == np.argmax(tfConvPredictions):
+            textSurface = font.render(textToRender, True, (0, 255, 0))
+        else:
+            textSurface = font.render(textToRender, True, (255, 255, 255))
+        screen.blit(textSurface, (drawWidth + predictionWidth // 2, tfLabel * screenHeight // 10 + fontSize // 2))
 
     pg.display.flip()
 
