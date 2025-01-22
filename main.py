@@ -1,309 +1,160 @@
 import pygame as pg
 import numpy as np
-import sklearn as skl
-import sklearn.datasets as datasets
-import pandas as pd
-import sklearn.naive_bayes as naive_bayes
-import sklearn.neural_network as neural_network
-import sklearn.svm as svm
-import pickle
-import tensorflow as tf
+import cv2 as cv
 
-# Data for mnist using tensorflow
-tfMnist = tf.keras.datasets.mnist
-(tfTrainImages, tfTrainLabels), (tfTestImages, tfTestLabels) = tfMnist.load_data()
-tfTrainImages = tfTrainImages.reshape((60000, 28, 28, 1))
-tfTestImages = tfTestImages.reshape((10000, 28, 28, 1))
 
-# Model using tensorflow
-'''
-TF_ENABLE_ONEDNN_OPTS = 0
-tfConvModel = tf.keras.models.Sequential()
-tfConvModel.add(tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)))
-tfConvModel.add(tf.keras.layers.MaxPooling2D((2, 2)))
-tfConvModel.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu'))
-tfConvModel.add(tf.keras.layers.MaxPooling2D((2, 2)))
-tfConvModel.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu'))
-
-tfConvModel.add(tf.keras.layers.Flatten())
-tfConvModel.add(tf.keras.layers.Dense(64, activation='relu'))
-tfConvModel.add(tf.keras.layers.Dense(10, activation='softmax'))
-
-tfConvModel.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-
-tfConvModel.fit(tfTrainImages, tfTrainLabels, epochs=5)
-
-tfTestLoss, tfTestAccuracy = tfConvModel.evaluate(tfTestImages, tfTestLabels, verbose=2)
-
-tfConvModel.save('models/tfConvModel.h5')
-'''
-tfConvModel = tf.keras.models.load_model('models/tfConvModel.h5')
-
-'''
-trainSize = 30000
-
-mnist = datasets.fetch_openml('mnist_784', version=1, cache=True)
-
-trainImages = np.array(mnist.data.astype(np.uint8)).reshape((-1, 28 * 28))[:trainSize]
-trainLabels = np.array(mnist.target.astype(np.uint8))[:trainSize]
-
-randomPermutation = np.random.permutation(trainSize)
-
-trainImages = trainImages[randomPermutation]
-trainLabels = trainLabels[randomPermutation]
-'''
+import Model
 
 
 
-'''
-# KNN
-def predictKNN(testImage, trainImages, trainLabels, K=100, metric='l2'):
-    if metric == 'l1':
-        distances = np.sum(np.abs(trainImages - testImage), axis=1)
-    elif metric == 'l2':
-        distances = np.sqrt(np.sum((trainImages - testImage) ** 2, axis=1))
-    indices = distances.argsort()
-    bestKIndices = indices[:K]
-    bestKLabels = trainLabels[bestKIndices]
-    return np.bincount(bestKLabels)
 
 
-# Naive Bayes
-numBins = 4
-# probability [label][pixel pos][bin index] / total tests
-naiveBayesProbabilities = [[[0.0] * numBins for j in range(28 * 28)] for i in range(10)]
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
 
-def initNaiveBayes(trainImages, trainLabels):
-    global naiveBayesProbabilities
-    global numBins
-    for image, lab in zip(trainImages, trainLabels):
-        for pixelPos in range(image.shape[0]):
-            binIndex = image[pixelPos] // (256 // numBins)
-            naiveBayesProbabilities[lab][pixelPos][binIndex] += 1.0
-    for lab in range(10):
-        for pixelPos in range(28 * 28):
-            for binIndex in range(numBins):
-                naiveBayesProbabilities[lab][pixelPos][binIndex] /= trainImages.shape[0]
-                if naiveBayesProbabilities[lab][pixelPos][binIndex] != 0:
-                    naiveBayesProbabilities[lab][pixelPos][binIndex] = np.log(naiveBayesProbabilities[lab][pixelPos][binIndex])
+FPS = 60
 
+WIDTH_PERCENT_DRAWING_AREA = 0.7
+CATEGORY_OFFSET_PERCENT = 0.05
+SCORE_OFFSET_PERCENT = -0.025
 
-initNaiveBayes(trainImages, trainLabels)
+NUM_DRAWING_PIXELS_ON_WIDTH = 28
+NUM_DRAWING_PIXELS_ON_HEIGHT = 28
 
-def predictNaiveBayes(testImage):
-    global numBins
-    global naiveBayesProbabilities
-    naiveBayesProbs = [0.0] * 10
-    for lab in range(10):
-        for pixelPos in range(testImage.shape[0]):
-            binIndex = testImage[pixelPos] // (256 // numBins)
-            naiveBayesProbs[lab] += naiveBayesProbabilities[lab][pixelPos][binIndex]
-    return np.array(naiveBayesProbs)
+PIXEL_WIDTH = SCREEN_WIDTH * WIDTH_PERCENT_DRAWING_AREA / NUM_DRAWING_PIXELS_ON_WIDTH
+PIXEL_HEIGHT = SCREEN_HEIGHT / NUM_DRAWING_PIXELS_ON_HEIGHT
 
-multinomialNB = naive_bayes.MultinomialNB()
-multinomialNB.fit(trainImages, trainLabels)
+BRUSH_SIZE_DRAWING = 1
+BRUSH_SIZE_ERASING = 3
 
-# MLP Classifier
+PREDICTION_HEIGHT = SCREEN_HEIGHT / len(Model.CATEGORIES)
 
-mlpClassifier = neural_network.MLPClassifier(hidden_layer_sizes=(64, 64), alpha=0.001, early_stopping=True)
-mlpClassifier.fit(trainImages, trainLabels)
-'''
+drawingBoard = [[(0, 0, 0) for _ in range(NUM_DRAWING_PIXELS_ON_WIDTH)] for _ in range(NUM_DRAWING_PIXELS_ON_HEIGHT)]
+drawingSpeed = 4
 
-# SVC
+prediction = None
 
-'''
-svc = svm.SVC(kernel='rbf', probability=True)
-svc.fit(trainImages, trainLabels)
+def draw():
+    pg.draw.rect(screen, (50, 50, 50), (SCREEN_WIDTH * WIDTH_PERCENT_DRAWING_AREA, 0, SCREEN_WIDTH * (1 - WIDTH_PERCENT_DRAWING_AREA), SCREEN_HEIGHT))
 
-with open('models/svcModel.pkl', 'wb') as svcFile:
-    pickle.dump(svc, svcFile)
-'''
+    for i in range(NUM_DRAWING_PIXELS_ON_HEIGHT):
+        for j in range(NUM_DRAWING_PIXELS_ON_WIDTH):
+            pg.draw.rect(screen, drawingBoard[i][j], (j * PIXEL_WIDTH, i * PIXEL_HEIGHT, PIXEL_WIDTH, PIXEL_HEIGHT))
 
-with open('models/svcModel.pkl', 'rb') as svcFile:
-    svc = pickle.load(svcFile)
+    for category in Model.CATEGORIES:
+        text = font.render(str(category), True, (255, 255, 255))
+        screen.blit(text, (SCREEN_WIDTH * (WIDTH_PERCENT_DRAWING_AREA + CATEGORY_OFFSET_PERCENT), category * PREDICTION_HEIGHT))
+
+    if prediction is not None:
+        for category in Model.CATEGORIES:
+            percentage = str(round(prediction[0][category] * 100, 2)) + '%'
+
+            color = (255, 255, 255)
+            if category == np.argmax(prediction):
+                color = (0, 255, 0)
+
+            text = font.render(percentage, True, color)
+            screen.blit(text, (SCREEN_WIDTH * (WIDTH_PERCENT_DRAWING_AREA + (1.0 - WIDTH_PERCENT_DRAWING_AREA) / 2 +
+                                               SCORE_OFFSET_PERCENT), category * PREDICTION_HEIGHT))
 
 
-# Interface, PyGame
+
+
+def dist(i1, j1, i2, j2):
+    return max(abs(i1 - i2), abs(j1 - j2))
+
+
+def update():
+    x, y = pg.mouse.get_pos()
+    if x < SCREEN_WIDTH * WIDTH_PERCENT_DRAWING_AREA:
+        i = int(y / PIXEL_HEIGHT)
+        j = int(x / PIXEL_WIDTH)
+        if pg.mouse.get_pressed()[0]:
+            for crtI in range(NUM_DRAWING_PIXELS_ON_HEIGHT):
+                for crtJ in range(NUM_DRAWING_PIXELS_ON_WIDTH):
+                    if dist(i, j, crtI, crtJ) > BRUSH_SIZE_DRAWING:
+                        continue
+                    drawingBoard[crtI][crtJ] = (drawingBoard[crtI][crtJ][0] + drawingSpeed * deltaTime,
+                                                drawingBoard[crtI][crtJ][1] + drawingSpeed * deltaTime,
+                                                drawingBoard[crtI][crtJ][2] + drawingSpeed * deltaTime)
+                    drawingBoard[crtI][crtJ] = (min(255, drawingBoard[crtI][crtJ][0]),
+                                                min(255, drawingBoard[crtI][crtJ][1]),
+                                                min(255, drawingBoard[crtI][crtJ][2]))
+        elif pg.mouse.get_pressed()[2]:
+            for crtI in range(NUM_DRAWING_PIXELS_ON_HEIGHT):
+                for crtJ in range(NUM_DRAWING_PIXELS_ON_WIDTH):
+                    if dist(i, j, crtI, crtJ) > BRUSH_SIZE_ERASING:
+                        continue
+                    drawingBoard[crtI][crtJ] = (drawingBoard[crtI][crtJ][0] - drawingSpeed * deltaTime,
+                                                drawingBoard[crtI][crtJ][1] - drawingSpeed * deltaTime,
+                                                drawingBoard[crtI][crtJ][2] - drawingSpeed * deltaTime)
+                    drawingBoard[crtI][crtJ] = (max(0, drawingBoard[crtI][crtJ][0]),
+                                                max(0, drawingBoard[crtI][crtJ][1]),
+                                                max(0, drawingBoard[crtI][crtJ][2]))
+
+
+
+def predict():
+    global prediction
+    global drawingBoard
+
+    drawingBoardInfo = np.zeros((NUM_DRAWING_PIXELS_ON_HEIGHT, NUM_DRAWING_PIXELS_ON_WIDTH))
+    for i in range(NUM_DRAWING_PIXELS_ON_HEIGHT):
+        for j in range(NUM_DRAWING_PIXELS_ON_WIDTH):
+            drawingBoardInfo[i][j] = drawingBoard[i][j][0] / 255.0
+
+    minRow = NUM_DRAWING_PIXELS_ON_HEIGHT
+    maxRow = -1
+    minCol = NUM_DRAWING_PIXELS_ON_WIDTH
+    maxCol = -1
+
+    for i in range(NUM_DRAWING_PIXELS_ON_HEIGHT):
+        for j in range(NUM_DRAWING_PIXELS_ON_WIDTH):
+            if drawingBoardInfo[i][j] > Model.GRAY_THRESHOLD:
+                minRow = min(minRow, i)
+                maxRow = max(maxRow, i)
+                minCol = min(minCol, j)
+                maxCol = max(maxCol, j)
+
+    if minRow <= maxRow and minCol <= maxCol:
+        drawingBoardInfo = drawingBoardInfo[minRow:maxRow + 1, minCol:maxCol + 1]
+
+        drawingBoardInfo = cv.resize(drawingBoardInfo, (28, 28))
+        drawingBoardInfo = drawingBoardInfo.reshape(28, 28, 1)
+
+        prediction = Model.cnnModel.predict(drawingBoardInfo.reshape(-1, 28, 28, 1))
+        print('Prediction:', np.argmax(prediction))
+
+
+
 
 
 pg.init()
 
-pixelWidth = 25
-pixelHeight = 25
+screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pg.display.set_caption('Digit Recognizer')
 
-numPixelsDrawWidth = 28
-numPixelsHeight = 28
-
-drawWidth = numPixelsDrawWidth * pixelWidth
-drawHeight = numPixelsHeight * pixelHeight
-
-numPixelsPredictionWidth = 28
-
-predictionWidth = numPixelsPredictionWidth * pixelWidth
-
-screenWidth = drawWidth + predictionWidth
-screenHeight = drawHeight
-
-fontSize = 40
-font = pg.font.Font(None, fontSize)
-
-screen = pg.display.set_mode((screenWidth, screenHeight))
-
-# clear
-screen.fill((0, 0, 0))
-drawMatrix = [[0] * numPixelsDrawWidth for y in range(numPixelsHeight)]
-drawCells = [[pg.Rect(x * pixelWidth, y * pixelHeight, pixelWidth, pixelHeight) for x in range(numPixelsDrawWidth)] for y in range(numPixelsHeight)]  # x, y, width, height
-
-# brush parameters
-drawSpeed = 5
-drawRadius = 2
-
-clearSpeed = 25
-clearRadius = 3
-
-pg.display.set_caption("DigitRecognizer")
-icon = pg.image.load("assets/sprites/iconDigit.png")
-pg.display.set_icon(icon)
+font = pg.font.SysFont('Arial', 36)
 
 isRunning = True
-isHoldingLeftClick = False
-isHoldingRightClick = False
-
-
-currentTime = pg.time.get_ticks()
-previousTime = currentTime
-currentTime = pg.time.get_ticks()
-deltaTime = currentTime - previousTime
-
-
+clock = pg.time.Clock()
 while isRunning:
     for event in pg.event.get():
         if event.type == pg.QUIT:
             isRunning = False
-        elif event.type == pg.MOUSEBUTTONDOWN:
-            if event.button == pg.BUTTON_LEFT:
-                isHoldingLeftClick = True
-            elif event.button == pg.BUTTON_RIGHT:
-                isHoldingRightClick = True
-        elif event.type == pg.MOUSEBUTTONUP:
-            if event.button == pg.BUTTON_LEFT:
-                isHoldingLeftClick = False
-            elif event.button == pg.BUTTON_RIGHT:
-                isHoldingRightClick = False
-    if isHoldingLeftClick:
-        (mouseX, mouseY) = pg.mouse.get_pos()
-        if 0 <= mouseX < screenWidth and 0 <= mouseY < screenHeight:
-            if mouseX < drawWidth:
-                drawMatrixLine = mouseY // pixelHeight
-                drawMatrixColumn = mouseX // pixelWidth
-                drawMatrix[drawMatrixLine][drawMatrixColumn] = min(255, drawMatrix[drawMatrixLine][drawMatrixColumn] + drawSpeed * deltaTime)
-                for lin in range(drawMatrixLine - drawRadius + 1, drawMatrixLine + drawRadius):
-                    for col in range(drawMatrixColumn - drawRadius + 1, drawMatrixColumn + drawRadius):
-                        if lin < 0 or lin >= numPixelsHeight or col < 0 or col >= numPixelsDrawWidth:
-                            continue
-                        dist = abs(drawMatrixLine - lin) + abs(drawMatrixColumn - col)
-                        if dist == 0:  # or dist >= drawRadius:
-                            continue
-                        drawMatrix[lin][col] = min(255, drawMatrix[lin][col] + drawSpeed * deltaTime // dist)
+        elif event.type == pg.KEYDOWN:
+            if event.key == pg.K_ESCAPE:
+                isRunning = False
+            elif event.key == pg.K_c or event.key == pg.K_C:
+                drawingBoard = [[(0, 0, 0) for _ in range(NUM_DRAWING_PIXELS_ON_WIDTH)]
+                                for _ in range(NUM_DRAWING_PIXELS_ON_HEIGHT)]
+                prediction = None
 
-    if isHoldingRightClick:
-        (mouseX, mouseY) = pg.mouse.get_pos()
-        if 0 <= mouseX < screenWidth and 0 <= mouseY < screenHeight:
-            if mouseX < drawWidth:
-                drawMatrixLine = mouseY // pixelHeight
-                drawMatrixColumn = mouseX // pixelWidth
-                drawMatrix[drawMatrixLine][drawMatrixColumn] = max(0, drawMatrix[drawMatrixLine][drawMatrixColumn] - clearSpeed * deltaTime)
-                for lin in range(drawMatrixLine - clearRadius + 1, drawMatrixLine + clearRadius):
-                    for col in range(drawMatrixColumn - clearRadius + 1, drawMatrixColumn + clearRadius):
-                        if lin < 0 or lin >= numPixelsHeight or col < 0 or col >= numPixelsDrawWidth:
-                            continue
-                        dist = abs(drawMatrixLine - lin) + abs(drawMatrixColumn - col)
-                        if dist == 0:  # or dist >= clearRadius:
-                            continue
-                        drawMatrix[lin][col] = max(0, drawMatrix[drawMatrixLine][drawMatrixColumn] - clearSpeed * deltaTime // dist)
-
-    clearPredictionScreen = pg.Rect(drawWidth, 0, predictionWidth, screenHeight)
-    pg.draw.rect(screen, (50, 50, 50), clearPredictionScreen)
-
-    for i in range(len(drawCells)):
-        for j in range(len(drawCells[i])):
-            luminosity = drawMatrix[i][j]
-            pg.draw.rect(screen, (luminosity, luminosity, luminosity), drawCells[i][j])
-
-    '''
-    # KNN
-    binCountsKNN = predictKNN(np.array(drawMatrix).reshape((-1,)), trainImages, trainLabels)
-
-    for label, frequency in enumerate(binCountsKNN):
-        textToRender = str(label) + ': ' + str(round(100 * frequency / np.sum(binCountsKNN), 2)) + '%'
-        if label == np.argmax(binCountsKNN):
-            textSurface = font.render(textToRender, True, (0, 255, 0))
-        else:
-            textSurface = font.render(textToRender, True, (255, 255, 255))
-        screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
-    for label in range(len(binCountsKNN), 10):
-        textToRender = str(label) + ': ' + str(round(0, 2)) + '%'
-        textSurface = font.render(textToRender, True, (255, 255, 255))
-        screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
-
-    # Naive Bayes
-    naiveBayesProb = predictNaiveBayes(np.array(drawMatrix).reshape((-1,)))
-
-    for label, prob in enumerate(naiveBayesProb):
-        if np.sum(naiveBayesProb) == 0.0:
-            probSum = 1.0
-        else:
-            probSum = np.sum(naiveBayesProb)
-        textToRender = str(label) + ': ' + str(round(100 * prob / probSum, 2)) + '%'
-        if label == np.argmax(naiveBayesProb):
-            textSurface = font.render(textToRender, True, (0, 255, 0))
-        else:
-            textSurface = font.render(textToRender, True, (255, 255, 255))
-        screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
-
-    print(multinomialNB.predict(np.array(drawMatrix).reshape((1, 784))))
-    
-    # MLP
-    mlpPredictions = mlpClassifier.predict_proba(np.array(drawMatrix).reshape((1, -1))).reshape((-1, ))
-
-    for label, prob in enumerate(mlpPredictions):
-        textToRender = str(label) + ': ' + str(round(100 * prob / np.sum(mlpPredictions), 2)) + '%'
-        if label == np.argmax(mlpPredictions):
-            textSurface = font.render(textToRender, True, (0, 255, 0))
-        else:
-            textSurface = font.render(textToRender, True, (255, 255, 255))
-        screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
-    #
-    
-    # SVC
-    svcPredictions = svc.predict_proba(np.array(drawMatrix).reshape((1, -1))).reshape((-1, ))
-
-    for label, prob in enumerate(svcPredictions):
-        textToRender = str(label) + ': ' + str(round(100 * prob / np.sum(svcPredictions), 2)) + '%'
-        if label == np.argmax(svcPredictions):
-            textSurface = font.render(textToRender, True, (0, 255, 0))
-        else:
-            textSurface = font.render(textToRender, True, (255, 255, 255))
-        screen.blit(textSurface, (drawWidth + predictionWidth // 2, label * screenHeight // 10 + fontSize // 2))
-    '''
-
-    # TensorFlow Conv model
-
-    tfConvPredictions = tfConvModel.predict(np.array(drawMatrix).reshape((1, 28, 28, 1))).reshape((-1,))
-    for tfLabel, tfProb in enumerate(tfConvPredictions):
-        textToRender = str(tfLabel) + ': ' + str(round(100 * tfProb, 2)) + '%'
-        if tfLabel == np.argmax(tfConvPredictions):
-            textSurface = font.render(textToRender, True, (0, 255, 0))
-        else:
-            textSurface = font.render(textToRender, True, (255, 255, 255))
-        screen.blit(textSurface, (drawWidth + predictionWidth // 2, tfLabel * screenHeight // 10 + fontSize // 2))
+    update()
+    predict()
+    screen.fill((0, 0, 0))
+    draw()
 
     pg.display.flip()
 
-    previousTime = currentTime
-    currentTime = pg.time.get_ticks()
-    deltaTime = currentTime - previousTime
-
-
-pg.quit()
-
+    deltaTime = clock.tick(FPS)
